@@ -1,89 +1,144 @@
 # Visual Search & Metadata Generator  
-## CLIP + Local LLM (LM Studio) Pipeline for Automated Fashion Catalog Intelligence
+### CLIP + FAISS + Local LLM (LM Studio) Pipeline for Fashion Product Intelligence
 
-This project builds a full AI pipeline for fashion product understanding using:
+This project implements a full **end-to-end product understanding system** for e-commerce.  
+It performs:
 
-- **CLIP (OpenCLIP ViT-B/32)** for visual attribute extraction  
-- **Local LLM (Phi-3.x via LM Studio)** for metadata generation  
-- **Automated CSV export** for scaling to large e-commerce catalogs  
+1. **Image → Embedding → Visual Similarity Search (FAISS)**
+2. **Image → Attribute Extraction (CLIP)**
+3. **Attributes → Product Metadata (Local LLM via LM Studio)**
+4. **Bulk CSV Generation for Catalog Automation**
 
-The system converts raw images of women's tops into **structured attributes**, **marketing-ready metadata**, and **SEO-rich descriptions** — all fully automated.
+Built fully offline with no cloud dependencies.
 
 ---
 
 ## Highlights
 
-- **Built a CLIP-based embedding + zero-shot classifier** for extracting color, neckline, sleeves, fabric, pattern, and fit  
-- **Automated metadata generation using a local LLM**  
-  - Title  
-  - Bullet points  
-  - Description  
-  - Style summary  
-  - SEO tags  
-- Achieved **~92% relevance accuracy** on visual attribute matching  
-- Increased metadata completeness by **~35%** compared to raw catalog data  
-- Reduced manual product tagging workload by **~60%**  
-- Fully local pipeline — **no cloud**, **no API costs**, **fully offline inference**
+### **1. Visual Similarity Search (CLIP + FAISS)**
+- Encodes all product images using **openCLIP ViT-B/32**
+- Builds a **FAISS IndexFlatIP** for fast cosine similarity search  
+- Retrieves **top-k visually similar fashion items**
+- Achieves ~92% relevance accuracy on test pairs
+
+### **2. Attribute Extraction**
+Extracts: Color, Neckline, Sleeve type, Pattern, Fabric, Fit  
+
+Using CLIP similarity scoring against controlled vocabularies.
+
+### **3. Metadata Generation (Local LLM)**
+Using a Phi-3 model in LM Studio:
+- Title  
+- Bullet points  
+- Description  
+- Style summary  
+- SEO tags  
+
+Following a strict JSON schema for consistent output.
+
+### **4. Bulk Automation**
+Batch script (`bulk_generate.py`) processes hundreds of images and exports a full CSV for large-scale catalog ingestion.
 
 ---
 
 ## Architecture Overview
 
-### **High-Level Flow**
+### High-Level Flow  
 ![Flowchart](images/flowchart.png)
-This pipeline transforms a raw fashion product image into structured catalog-ready data. The image is first encoded using CLIP to extract visual attributes, which are then passed to a local LLM that generates clean product metadata (title, bullets, description, SEO tags). Finally, all outputs are exported into a CSV for bulk catalog automation.
 
-## System Architecture
+### System Architecture  
 ![System Architecture](images/sample_architecture.png)
+
+This pipeline transforms a raw fashion product image into structured attributes, metadata, and similarity-based recommendations.
+
 ---
 
 ## Project Structure
 
 ```
+
 project/
 │
-├── bulk_generate.py          # Batch processing: image → attributes → metadata → CSV
-├── clip_extractor.py         # CLIP-based attribute extraction
-├── local_metadata.py         # LM Studio LLM JSON generator
-├── attribute_vocab.py        # Controlled vocab for attributes
+├── run_pipeline.py          # Unified search + attributes + metadata for a single image
+├── visual_search.py         # CLIP embedding + FAISS similarity index
+├── clip_extractor.py        # CLIP attribute extraction
+├── local_metadata.py        # LM Studio local LLM metadata generator
+├── attribute_vocab.py       # Controlled vocabulary for attributes
 │
-└── dataset/
-      └── images/             # Your product images (500 in your case)
-```
-
----
-
-## Sample Output (CSV Format)
-![Sample Output](images/sample_output.png)
-```
-image,color,neckline,sleeve,pattern,fabric,fit,title,bullet_points,description,style_summary,seo_tags
-data (10).jpg,white,v-neck,long sleeve,solid,cotton,slim,White V-Neck Long Sleeve Cotton Top	V Neckline, White Color	A comfortable slim fit long sleeve white cotton top with a v neck.	Slim-fit V-necked women's tops in solid color	women,top,cotton,v-neck
+├── bulk_generate.py         # Batch catalog automation → CSV
+├── images/                  # Diagrams & sample outputs
+└── sample_dataset/          # Optional sample input images
 
 ```
 
 ---
 
-## Attribute Extraction (CLIP Zero-Shot)
+## Visual Similarity Search (CLIP + FAISS)
 
-The project uses **openCLIP ViT-B/32** to classify attributes through similarity scoring against controlled vocabularies:
+This module retrieves visually similar products using image embeddings.
+
+### Build Embeddings + FAISS Index
+
+```
+
+python visual_search.py
+
+```
+
+Creates:
+```
+
+embeddings.npy
+filenames.json
+faiss_index.bin
+
+````
+
+### Query Similar Items
 
 ```python
-COLOR_VOCAB = ["black","white","red","blue","green","yellow","pink","beige"]
-SLEEVE_VOCAB = ["sleeveless","short sleeve","long sleeve"]
-PATTERN_VOCAB = ["solid","striped","printed","floral"]
-FABRIC_VOCAB = ["cotton","polyester","denim","silk"]
-FIT_VOCAB = ["regular","slim","loose"]
+from visual_search import search_similar
+
+results = search_similar(
+    r"C:\Users\ThinkPad\Desktop\Visual Search Enhancer\dataset\images\data (1).jpg"
+)
+
+print(results)
+````
+
+Sample output:
+
+```
+[
+  {'filename': 'data (1).jpg', 'score': 0.9999},
+  {'filename': 'data (429).jpg', 'score': 0.8451},
+  {'filename': 'data (268).jpg', 'score': 0.8448},
+  {'filename': 'data (421).jpg', 'score': 0.8419},
+  {'filename': 'data (181).jpg', 'score': 0.8416}
+]
 ```
 
-This keeps the system reliable, clean, and predictable.
+---
+
+## Attribute Extraction 
+
+Attributes are extracted by scoring CLIP embeddings against controlled vocabularies:
+
+```python
+COLOR_VOCAB = ["black", "white", "red", "blue", "green", "yellow", "pink", "beige"]
+SLEEVE_VOCAB = ["sleeveless", "short sleeve", "long sleeve"]
+PATTERN_VOCAB = ["solid", "striped", "printed", "floral"]
+FABRIC_VOCAB = ["cotton", "polyester", "denim", "silk"]
+FIT_VOCAB = ["regular", "slim", "loose"]
+```
 
 ---
 
 ## Metadata Generation (Local LLM)
 
-The LLM runs **locally through LM Studio** using the OpenAI-compatible API.
+Uses LM Studio running a Phi-3 model through the OpenAI-compatible API.
 
-Each metadata output follows a strict JSON schema:
+### JSON Schema Output
 
 ```json
 {
@@ -95,32 +150,37 @@ Each metadata output follows a strict JSON schema:
 }
 ```
 
-The LLM is “caged” using a JSON schema + system prompts to prevent rambling and ensure consistent output.
+Fully offline, deterministic, and fast.
+
+---
+
+## Unified Pipeline: Run Everything at Once
+
+Process any single image and get:
+
+* Visual attributes
+* Product metadata
+* Top-5 similar products
+
+```
+python run_pipeline.py --image "path/to/image.jpg"
+```
+
+---
+
+## Sample Output
+![Sample Output 1](images/sampleop.png)
+![Sample Output](images/sample_output.png)
 
 ---
 
 ## Installation
 
-### **1. Install Dependencies**
-
 ```
-pip install torch open-clip-torch pillow pandas tqdm requests
+pip install torch open-clip-torch pillow pandas tqdm requests faiss-cpu
 ```
 
-### **2. Install LM Studio**
-
-Download from: [https://lmstudio.ai](https://lmstudio.ai)
-Load the model:
-
-* `phi-3.5-mini-instruct` (or smaller models for speed)
-
-Enable:
-
-```
-Developer → OpenAI-Compatible Server
-```
-
-Confirm it runs at:
+Install LM Studio → load `phi-3.5-mini-instruct` → enable OpenAI-compatible server on:
 
 ```
 http://127.0.0.1:1234
@@ -128,46 +188,35 @@ http://127.0.0.1:1234
 
 ---
 
-## Usage
-
-### **Run batch generation for all images:**
-
-```
-python bulk_generate.py
-```
-
-Outputs:
-
-```
-final_metadata.csv
-```
-
----
-
 ## Results
 
-* ~92% visual match for zero-shot attribute extraction using CLIP
-* Metadata completeness improved by ~35%
-* Entire pipeline executes locally without GPU
-* Processes ~500 images in ~2 hours on CPU
-* 100% offline model inference
+* ~92% visual match using CLIP embeddings
+* ~35% improvement in metadata completeness
+* Fully offline execution
+* ~2 hours for 500-image batch processing on CPU
 
 ---
 
 ## Future Enhancements
 
-* Add **FAISS vector search** for similar product retrieval
-* Add **Streamlit UI** for demo
-* Build **Myntra-style product detail page generator**
-* Add **confidence scores** for attributes
-* Extend CLIP vocab for more complex garments
-* Add **automated multi-image product clustering**
+* Product clustering using embeddings
+* Style-based recommendation engine
+* Attribute confidence scoring
+* Streamlit UI for interactive demo
+* Enhanced vocabularies for dresses, jeans, sarees, etc.
 
 ---
+
 ## Acknowledgements
 
 * openCLIP
+* FAISS
 * LM Studio
 * Phi LLM family
 * PyTorch
-* Fashion datasets from Kaggle
+* Kaggle datasets
+
+---
+
+
+```
